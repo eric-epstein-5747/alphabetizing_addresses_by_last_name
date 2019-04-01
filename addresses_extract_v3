@@ -1,0 +1,98 @@
+#!/usr/bin/python2
+# PURPOSE: To extract addresses from a table in a .docx file and input them into 
+# an excel file, capturing first name, last name, and address. The excel file's 
+# entries can then easily be alphabetized by last name. 
+#
+# NOTE: 
+# 1. Assumes that the input file is a .docx file consisting of a single table 
+#    with nothing else in the file. Assumes that each cell contains either a 
+#    single line consisting of the empty string or else a name and address of 
+#    the following form:
+#
+#	PRINCIPAL ADDRESSEE(S) 
+#	OTHER HOUSEHOLD MEMBERS (OR, IF NONE, ADDRESS LINE 1)
+#	ADDRESS, CONT'D 
+#	ADDRESS, CONT'D
+#	(ADDRESS, CONT'D)
+#
+# 2. Will accept prefixes & suffixes in names, as well as "The Schromiels" and 
+#    "Eric Epstein and \n Erica Epstein", and the like. Assumes that every 
+#    address begins with 0-9 or "P.O. Box".
+#
+# COMMAND LINE USAGE: ./addresses_extract_v2 Address\ List\ 2018.docx
+# Can also be run as a script in any Python 2.7 IDE.
+#
+# BUGS: 
+# 	1. Will not write in unicode characters. E.g., takes the accent off of the 
+#	   'c' in the proper Serbian spelling of 'Djekic'. 
+#	2. Puts a blank line after every three lines of the output file. (Not sure 
+#	   why! In this respect, the program acts as though it believes there is a 
+#	   fourth column in the input file. But if you ask the docx module, the 
+#	   answer is 3 columns.)
+#	3. Cannot run on variable input. Name of input file is hard-coded in.
+
+import re
+import docx
+import xlsxwriter
+
+workbook = xlsxwriter.Workbook('Addresses.xlsx')
+worksheet = workbook.add_worksheet()
+worksheet.write('A1', 'Principal Last Name of Household')
+worksheet.write('B1', 'Principal Addressees')
+worksheet.write('C1', 'Other Household Members')
+worksheet.write('D1', 'Address Line 1')
+worksheet.write('E1', 'Address Line 2')
+worksheet.write('F1', 'Address Line 3')
+
+doc = docx.Document('Address List 2018.docx')
+doc.save('Address List 2018.docx')
+
+def nums_to_letts(p):
+	if p == 0:
+		return 'B'
+	elif p == 1:
+		return 'C'
+ 	elif p == 2:
+		return 'D'
+	elif p == 3:
+		return 'E'
+	elif p == 4:
+		return 'F'
+	elif p == 5:
+		return 'G'
+	else: return 'H'
+
+M = 0
+# Index for finding matching errors: 
+#index = 1
+for n in range(0, len(doc.tables[0].rows)):
+	row = doc.tables[0].rows[n]
+	for m in range(0, len(row.cells)):
+		cell = row.cells[m]
+		# Capture the principal last name of the household and write it to column A to use for later organizing.
+		line0 = cell.paragraphs[0]
+		line00 = line0.text.encode('utf-8')
+		if line00 == '':
+			0 == 0
+		else:
+			principal_name = re.match(r'.*(?!Family)(\b[A-Z]+[A-Za-z]+\b)(?:(?:, Jr)|(?: and)|(?: Family)|(?:")|(?:$)|(?:,))', line00).group(1)
+			worksheet.write('A'+str(n+M+2), principal_name)
+
+			# Mechanism for finding matching errors:
+			#print('No mismatches found in row '+str(n))
+			#print(line00)
+			#index +=1
+
+			if len(cell.paragraphs) == 1:
+				worksheet.write('B' + str(n+M+2), cell.paragraphs[0].text)
+			else: 
+				line1 = cell.paragraphs[1].text.encode('utf-8')
+				if re.match(r'(?:[0-9])|(?:P.O. Box).*', line1):
+					worksheet.write('B'+str(n+M+2), cell.paragraphs[0].text)
+					for p in range(1, len(cell.paragraphs)):
+						worksheet.write(nums_to_letts(p+1)+str(n+M+2), cell.paragraphs[p].text)
+				else:				
+					for p in range(0, len(cell.paragraphs)):
+						worksheet.write(nums_to_letts(p) + str(n+M+2), cell.paragraphs[p].text)
+		M += 1
+workbook.close()
